@@ -1,0 +1,127 @@
+---
+variables:
+  PYTHON_VERSION: "3.9"
+  PIPENV_VENV_IN_PROJECT: "1"
+#  PACKAGE_VERSION: "1.2.3"
+#  DARWIN_AMD64_BINARY: "myawesomerelease-darwin-amd64-${PACKAGE_VERSION}"
+#  LINUX_AMD64_BINARY: "myawesomerelease-linux-amd64-${PACKAGE_VERSION}"
+#  PACKAGE_REGISTRY_URL: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/myawesomerelease/${PACKAGE_VERSION}"
+
+stages:
+  - init
+  - test
+  - deploy
+#  - build
+#  - upload
+#  - release
+
+pipenv-creator:
+  stage: init
+  tags:
+  - docker
+  image: aminkm/linter:latest
+  script:
+    - pipenv --python 3.9 install --dev
+  cache:
+    paths:
+      - .venv
+    key: $CI_COMMIT_REF_NAME-$PYTHON_VERSION
+    untracked: true
+    policy: pull-push
+  interruptible: true
+
+
+pylint:
+  stage: test
+  tags:
+  - docker
+  image: aminkm/linter:latest
+  before_script:
+    - mkdir -p public/badges public/lint
+    - echo undefined > public/badges/$CI_JOB_NAME.score
+    - pip install pylint-exit
+  script:
+    - pylint --exit-zero --output-format=text $(find -type f -name "*.py" ! -path "**/.venv/**") | tee /tmp/pylint.txt
+    - sed -n 's/^Your code has been rated at \([-0-9.]*\)\/.*/\1/p' /tmp/pylint.txt > public/badges/$CI_JOB_NAME.score
+    - pylint --exit-zero --output-format=pylint_gitlab.GitlabPagesHtmlReporter $(find -type f -name "*.py" ! -path "**/.venv/**") > public/lint/index.html
+  after_script:
+    - anybadge --overwrite --label $CI_JOB_NAME --value=$(cat public/badges/$CI_JOB_NAME.score) --file=public/badges/$CI_JOB_NAME.svg 4=red 6=orange 8=yellow 10=green
+    - |
+      echo "Your score is: $(cat public/badges/$CI_JOB_NAME.score)"
+    - anybadge --label=pipeline --value=passing --file=public/badges/pipeline.svg passing=green failing=red
+  artifacts:
+    paths:
+      - public
+
+
+black:
+  stage: test
+  tags:
+  - docker
+  image: aminkm/linter:latest
+  script:
+    - black .
+
+
+isort:
+  stage: test
+  tags:
+  - docker
+  image: aminkm/linter:latest
+  script:
+    - isort .
+
+
+pages:
+  stage: deploy
+  tags:
+  - docker
+  image: aminkm/linter:latest
+  script:
+    - echo
+  artifacts:
+    paths:
+      - public
+
+#
+#build:
+#  stage: build
+#  tags:
+#  - docker
+#  image: alpine:latest
+#  rules:
+#    - if: $CI_COMMIT_TAG
+#  script:
+#    - mkdir bin
+#    - echo "Mock binary for ${DARWIN_AMD64_BINARY}" > bin/${DARWIN_AMD64_BINARY}
+#    - echo "Mock binary for ${LINUX_AMD64_BINARY}" > bin/${LINUX_AMD64_BINARY}
+#  artifacts:
+#    paths:
+#      - bin/
+#
+#upload:
+#  stage: upload
+#  tags:
+#  - docker
+#  image: curlimages/curl:latest
+#  rules:
+#    - if: $CI_COMMIT_TAG
+#  script:
+#    - |
+#      curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file bin/${DARWIN_AMD64_BINARY} ${PACKAGE_REGISTRY_URL}/${DARWIN_AMD64_BINARY}
+#    - |
+#      curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file bin/${LINUX_AMD64_BINARY} ${PACKAGE_REGISTRY_URL}/${LINUX_AMD64_BINARY}
+#
+#release:
+#  stage: release
+#  tags:
+#  - docker
+#  image: registry.gitlab.com/gitlab-org/release-cli:latest
+#  rules:
+#    - if: $CI_COMMIT_TAG
+#  script:
+#    - |
+#      release-cli create --name "Release $CI_COMMIT_TAG" --tag-name $CI_COMMIT_TAG \
+#        --assets-link "{\"name\":\"${DARWIN_AMD64_BINARY}\",\"url\":\"${PACKAGE_REGISTRY_URL}/${DARWIN_AMD64_BINARY}\"}" \
+#        --assets-link "{\"name\":\"${LINUX_AMD64_BINARY}\",\"url\":\"${PACKAGE_REGISTRY_URL}/${LINUX_AMD64_BINARY}\"}"
+#
