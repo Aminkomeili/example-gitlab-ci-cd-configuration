@@ -22,6 +22,7 @@ To use this GitLab CI/CD configuration in your project:
 4. Set up a GitLab CI/CD runner to execute the pipeline.
 
 That's it! Your project should now have a CI/CD pipeline that automatically validates the code and can deploy it to a server or other destination.
+
 ## License
 
 This example GitLab CI/CD configuration is released under the MIT License. See the LICENSE file for details.
